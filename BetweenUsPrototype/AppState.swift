@@ -2,6 +2,9 @@ import SwiftUI
 
 @MainActor
 final class AppState: ObservableObject {
+    private static let productionCloudGeneratorURL =
+        "https://two-humans-communication-1.onrender.com"
+
     @Published var stage: AppStage = .qiyuHome
     @Published var reflectionOwner: Perspective = .qiyu
     @Published var entryMode: ReflectionEntryMode = .concreteMoment
@@ -44,8 +47,18 @@ final class AppState: ObservableObject {
     private let cloudURLKey = "between-us.cloud-generator-url"
 
     init() {
-        cloudGeneratorURL = UserDefaults.standard.string(forKey: "between-us.cloud-generator-url")
-            ?? "http://127.0.0.1:8787"
+        let savedCloudURL = UserDefaults.standard.string(
+            forKey: "between-us.cloud-generator-url"
+        )
+        if savedCloudURL == nil || savedCloudURL == "http://127.0.0.1:8787" {
+            cloudGeneratorURL = Self.productionCloudGeneratorURL
+            UserDefaults.standard.set(
+                Self.productionCloudGeneratorURL,
+                forKey: "between-us.cloud-generator-url"
+            )
+        } else {
+            cloudGeneratorURL = savedCloudURL!
+        }
         loadHistory()
         loadProfiles()
         loadPeople()
