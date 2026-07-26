@@ -69,7 +69,7 @@ struct CloudScenarioService: ScenarioGenerationProvider {
 
         var networkRequest = URLRequest(url: url.appendingPathComponent("generate"))
         networkRequest.httpMethod = "POST"
-        networkRequest.timeoutInterval = 75
+        networkRequest.timeoutInterval = 65
         networkRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         networkRequest.httpBody = try JSONEncoder().encode(
             CloudRequest(request: request, receiver: receiver)
@@ -88,7 +88,7 @@ struct CloudScenarioService: ScenarioGenerationProvider {
         }
 
         let payload = try JSONDecoder().decode(CloudResponse.self, from: data)
-        guard payload.rounds.count >= 3,
+        guard !payload.rounds.isEmpty,
               payload.rounds.allSatisfy({ $0.scenarios.count == 2 })
         else {
             throw ScenarioGenerationError.invalidScenarios

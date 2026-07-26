@@ -35,6 +35,18 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: String(describing: appState.stage))
+        .onChange(of: String(describing: appState.stage)) {
+            dismissKeyboard()
+        }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 
     private var setBackground: Color {

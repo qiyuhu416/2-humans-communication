@@ -74,6 +74,15 @@ struct FlowerGardenBackground: View {
 struct PerspectiveEntryView: View {
     @EnvironmentObject private var appState: AppState
     @State private var flowers: [HomeFlower] = []
+    @State private var aiStepIndex = 0
+    @State private var didFail = false
+
+    private let aiSteps = [
+        "Reading what you wrote",
+        "Checking the saved profiles",
+        "Writing two concrete versions",
+        "Checking that one behavior changes"
+    ]
 
     var body: some View {
         GeometryReader { proxy in
@@ -85,7 +94,8 @@ struct PerspectiveEntryView: View {
                 ForEach(flowers) { flower in
                     GrowingHomeFlower(
                         stemHeight: flower.stemHeight,
-                        color: flower.color
+                        color: flower.color,
+                        fadesAfterBloom: false
                     ) {
                         flowers.removeAll { $0.id == flower.id }
                     }
@@ -100,15 +110,44 @@ struct PerspectiveEntryView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Spacer()
 
-                    Text("Making it concrete")
+                    Text(didFail ? "Didn’t work!" : "Making it concrete")
                         .font(.system(size: 38, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.ink)
                         .tracking(-1)
 
-                    Text("Finding two everyday versions you can talk about together.")
+                    Text(
+                        didFail
+                            ? "The flowers may have overreacted."
+                            : "Finding two everyday versions you can talk about together."
+                    )
                         .font(.title3)
                         .foregroundStyle(AppTheme.secondaryInk)
                         .lineSpacing(4)
+
+                    if appState.scenarioSourceMode == .adaptive && !didFail {
+                        VStack(alignment: .leading, spacing: 11) {
+                            ForEach(Array(aiSteps.enumerated()), id: \.offset) { index, step in
+                                HStack(spacing: 10) {
+                                    Image(
+                                        systemName: index < aiStepIndex
+                                            ? "checkmark"
+                                            : (index == aiStepIndex ? "ellipsis" : "circle")
+                                    )
+                                    .font(.caption.weight(.semibold))
+                                    .frame(width: 18)
+
+                                    Text(step)
+                                        .font(.subheadline)
+                                }
+                                .foregroundStyle(
+                                    index <= aiStepIndex
+                                        ? AppTheme.ink
+                                        : AppTheme.secondaryInk.opacity(0.55)
+                                )
+                            }
+                        }
+                        .padding(.top, 18)
+                    }
 
                     Spacer()
                         .frame(height: proxy.size.height * 0.34)
@@ -139,13 +178,15 @@ struct PerspectiveEntryView: View {
     @MainActor
     private func animateFlowers(in size: CGSize, waterline: CGFloat) async {
         let points = [
-            CGPoint(x: size.width * 0.25, y: size.height * 0.69),
-            CGPoint(x: size.width * 0.50, y: size.height * 0.61),
-            CGPoint(x: size.width * 0.76, y: size.height * 0.72)
+            CGPoint(x: size.width * 0.25, y: size.height * 0.79),
+            CGPoint(x: size.width * 0.50, y: size.height * 0.77),
+            CGPoint(x: size.width * 0.76, y: size.height * 0.81)
         ]
 
+        let completion = LoadingCompletion()
         let generationTask = Task {
             await appState.prepareScenarioFlow(advanceWhenReady: false)
+            await completion.markFinished()
         }
 
         for point in points {
@@ -153,11 +194,51 @@ struct PerspectiveEntryView: View {
             try? await Task.sleep(nanoseconds: 280_000_000)
         }
 
-        try? await Task.sleep(nanoseconds: 650_000_000)
-        await generationTask.value
+        var timedOut = true
+        for tick in 0..<140 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else {
+                generationTask.cancel()
+                return
+            }
 
-        guard !Task.isCancelled else { return }
-        appState.stage = appState.generationError == nil ? .conversationGuide : .qiyuHome
+            if appState.scenarioSourceMode == .adaptive {
+                aiStepIndex = min(tick / 10, aiSteps.count - 1)
+            }
+
+            if await completion.isFinished, tick >= 2 {
+                timedOut = false
+                break
+            }
+        }
+
+        guard !Task.isCancelled else {
+            generationTask.cancel()
+            return
+        }
+
+        if timedOut || appState.generationError != nil {
+            generationTask.cancel()
+            if timedOut {
+                appState.generationError = "The request took longer than 70 seconds."
+            }
+            didFail = true
+            growFailureGarden(in: size, waterline: waterline)
+        } else {
+            appState.stage = .conversationGuide
+        }
+    }
+
+    private func growFailureGarden(in size: CGSize, waterline: CGFloat) {
+        let xPositions: [CGFloat] = [0.08, 0.22, 0.36, 0.50, 0.64, 0.78, 0.92]
+
+        for (index, x) in xPositions.enumerated() {
+            let y = size.height * (index.isMultiple(of: 2) ? 0.16 : 0.28)
+            plantFlower(
+                at: CGPoint(x: size.width * x, y: y),
+                waterline: waterline
+            )
+        }
     }
 
     private func plantFlower(at point: CGPoint, waterline: CGFloat) {
@@ -183,6 +264,18 @@ struct PerspectiveEntryView: View {
                 flowers.removeFirst()
             }
         }
+    }
+}
+
+private actor LoadingCompletion {
+    private var finished = false
+
+    func markFinished() {
+        finished = true
+    }
+
+    var isFinished: Bool {
+        finished
     }
 }
 

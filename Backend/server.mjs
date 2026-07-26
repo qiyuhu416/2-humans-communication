@@ -35,9 +35,9 @@ function extractOutputText(envelope) {
   return null;
 }
 
-function validateRounds(payload) {
-  if (!payload || !Array.isArray(payload.rounds) || payload.rounds.length < 3) {
-    throw new Error("The model did not return at least three rounds.");
+function validateRounds(payload, requestedRoundCount) {
+  if (!payload || !Array.isArray(payload.rounds) || payload.rounds.length < 1) {
+    throw new Error("The model did not return any rounds.");
   }
 
   for (const round of payload.rounds) {
@@ -54,15 +54,19 @@ function validateRounds(payload) {
     }
   }
 
-  return { rounds: payload.rounds.slice(0, 6) };
+  return { rounds: payload.rounds.slice(0, requestedRoundCount) };
 }
 
 function generationPrompt(input) {
   const receiver = input.receiver;
   const actor = receiver === "Qiyu" ? "Samar" : "Qiyu";
+  const requestedRoundCount = Math.max(
+    1,
+    Math.min(3, Number(input.request?.requestedRoundCount) || 2),
+  );
 
   return `
-Create six face-to-face relationship conversation rounds from the supplied user text and profiles.
+Create exactly ${requestedRoundCount} face-to-face relationship conversation rounds from the supplied user text and profiles.
 
 The person being understood is ${receiver}. ${receiver} chooses what would feel good to receive. ${actor} independently chooses what they could comfortably do in real life.
 
@@ -74,6 +78,7 @@ Research constraints:
 - Do not infer that either person wants to meet, is available, is thinking about the relationship, or feels an emotion unless the input explicitly says so.
 - Avoid personality labels, therapy labels, happy endings, and headings that reveal an intended answer.
 - Order rounds from the typed concern toward adjacent uncertainties.
+- The input may include previousRounds. Do not repeat their openings, tested variables, or behavioral comparisons.
 - Use unique lowercase-hyphenated IDs.
 - currentDayIndex and targetDayIndex are integers from 0 through 6.
 - potentialVariables has 3–5 concise labels.
@@ -148,9 +153,12 @@ const server = http.createServer(async (request, response) => {
       body: JSON.stringify({
         model,
         input: generationPrompt(input),
+        reasoning: { effort: "none" },
+        max_output_tokens: 6000,
         text: { verbosity: "low" },
         store: false,
       }),
+      signal: AbortSignal.timeout(60_000),
     });
 
     const envelope = await openAIResponse.json();
@@ -168,7 +176,11 @@ const server = http.createServer(async (request, response) => {
       .replace(/\s*```$/, "")
       .trim();
 
-    const generated = validateRounds(JSON.parse(outputText));
+    const requestedRoundCount = Math.max(
+      1,
+      Math.min(3, Number(input.request?.requestedRoundCount) || 2),
+    );
+    const generated = validateRounds(JSON.parse(outputText), requestedRoundCount);
     return sendJSON(response, 200, generated);
   } catch (error) {
     return sendJSON(response, 500, {

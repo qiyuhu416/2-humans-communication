@@ -117,6 +117,14 @@ struct ScenarioGenerationRequest: Codable {
     let userText: String
     let personName: String
     let profile: PersonalizationContext
+    let requestedRoundCount: Int
+    let previousRounds: [GeneratedRoundReference]
+}
+
+struct GeneratedRoundReference: Codable {
+    let opening: String
+    let testedVariableLabel: String
+    let testVariable: String
 }
 
 enum Perspective: String, Codable, Hashable {

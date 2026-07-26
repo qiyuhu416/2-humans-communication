@@ -699,6 +699,9 @@ struct QiyuHomeView: View {
                                 .font(.body)
                                 .scrollContentBackground(.hidden)
                                 .focused($composerIsFocused)
+                                .onChange(of: appState.feeling) {
+                                    appState.notePromptWasEdited()
+                                }
                                 .padding(.leading, 12)
                                 .padding(.trailing, 54)
                                 .padding(.top, 10)
@@ -738,11 +741,17 @@ struct QiyuHomeView: View {
 
                         FlowLayout(spacing: 8) {
                             ForEach(appState.selectedPersonSuggestions.prefix(3), id: \.question) { suggestion in
-                                HomeSuggestionChip(label: suggestion.label) {
-                                    appState.feeling = suggestion.question
+                                HomeSuggestionChip(
+                                    label: suggestion.label,
+                                    selected: appState.selectedSuggestedPrompt == suggestion.question
+                                ) {
+                                    appState.selectSuggestedQuestion(suggestion.question)
                                 }
                             }
                         }
+                        .opacity(appState.isAIEnabled ? 1 : 0)
+                        .allowsHitTesting(appState.isAIEnabled)
+                        .accessibilityHidden(!appState.isAIEnabled)
                     }
 
                         if !appState.sessionsForSelectedPerson.isEmpty {
@@ -881,6 +890,7 @@ struct QiyuHomeView: View {
 
 private struct HomeSuggestionChip: View {
     let label: String
+    let selected: Bool
     let action: () -> Void
 
     var body: some View {
@@ -892,6 +902,10 @@ private struct HomeSuggestionChip: View {
                 .padding(.vertical, 9)
                 .background(Color(.secondarySystemBackground))
                 .clipShape(Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(selected ? AppTheme.accent : Color.clear, lineWidth: 1.5)
+                }
         }
         .buttonStyle(.plain)
     }

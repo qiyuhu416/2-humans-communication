@@ -310,14 +310,24 @@ struct RevealView: View {
 
             Spacer()
 
-            Button(action: moveForward) {
-                Image(systemName: "arrow.right")
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(AppTheme.ink)
-                    .frame(width: 58, height: 58)
+            Button {
+                Task { await appState.startNextRound() }
+            } label: {
+                Group {
+                    if appState.isPreparingNextRound {
+                        ProgressView()
+                            .tint(AppTheme.ink)
+                    } else {
+                        Image(systemName: "arrow.right")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(AppTheme.ink)
+                    }
+                }
+                .frame(width: 58, height: 58)
             }
             .buttonStyle(.plain)
+            .disabled(appState.isPreparingNextRound)
             .accessibilityLabel("Next question")
         }
     }
@@ -335,9 +345,6 @@ struct RevealView: View {
             : "\(person.rawValue) could comfortably do"
     }
 
-    private func moveForward() {
-        appState.startNextRound()
-    }
 }
 
 private struct RevealScrollOffsetKey: PreferenceKey {
