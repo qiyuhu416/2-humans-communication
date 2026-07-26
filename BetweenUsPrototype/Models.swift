@@ -52,6 +52,7 @@ struct SavedSession: Identifiable, Hashable, Codable {
     let feeling: String
     let answers: [RoundAnswerRecord]
     let experiment: String?
+    let ownerName: String?
     let receiver: Perspective?
 }
 
@@ -114,6 +115,7 @@ struct PersonalizationContext: Codable {
 struct ScenarioGenerationRequest: Codable {
     let entryMode: String
     let userText: String
+    let personName: String
     let profile: PersonalizationContext
 }
 

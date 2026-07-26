@@ -16,6 +16,8 @@ protocol ScenarioGenerationProvider {
 enum ScenarioGenerationError: LocalizedError {
     case operatingSystemTooOld
     case modelUnavailable(String)
+    case cloudNotConfigured
+    case cloudError(String)
     case invalidScenarios
 
     var errorDescription: String? {
@@ -24,9 +26,74 @@ enum ScenarioGenerationError: LocalizedError {
             return "On-device AI requires iOS 26 or later."
         case .modelUnavailable(let reason):
             return reason
+        case .cloudNotConfigured:
+            return "Add the cloud generator URL in the AI tab."
+        case .cloudError(let message):
+            return message
         case .invalidScenarios:
             return "The on-device model did not create a usable comparison. Try a shorter, more concrete question."
         }
+    }
+}
+
+struct CloudScenarioService: ScenarioGenerationProvider {
+    private struct CloudRequest: Encodable {
+        let request: ScenarioGenerationRequest
+        let receiver: Perspective
+    }
+
+    private struct CloudResponse: Decodable {
+        let rounds: [ScenarioRound]
+    }
+
+    let endpoint: String
+
+    var isAvailable: Bool {
+        guard let url = URL(string: endpoint),
+              let scheme = url.scheme?.lowercased()
+        else { return false }
+        return scheme == "https" || scheme == "http"
+    }
+
+    var availabilityDescription: String {
+        isAvailable ? "Cloud generator configured" : "Add a backend URL"
+    }
+
+    func generate(
+        request: ScenarioGenerationRequest,
+        receiver: Perspective
+    ) async throws -> [ScenarioRound] {
+        guard let url = URL(string: endpoint), isAvailable else {
+            throw ScenarioGenerationError.cloudNotConfigured
+        }
+
+        var networkRequest = URLRequest(url: url.appendingPathComponent("generate"))
+        networkRequest.httpMethod = "POST"
+        networkRequest.timeoutInterval = 75
+        networkRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        networkRequest.httpBody = try JSONEncoder().encode(
+            CloudRequest(request: request, receiver: receiver)
+        )
+
+        let (data, response) = try await URLSession.shared.data(for: networkRequest)
+        guard let http = response as? HTTPURLResponse else {
+            throw ScenarioGenerationError.cloudError("The cloud generator did not return an HTTP response.")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let message = object?["error"] as? String
+            throw ScenarioGenerationError.cloudError(
+                message ?? "Cloud generation failed with HTTP \(http.statusCode)."
+            )
+        }
+
+        let payload = try JSONDecoder().decode(CloudResponse.self, from: data)
+        guard payload.rounds.count >= 3,
+              payload.rounds.allSatisfy({ $0.scenarios.count == 2 })
+        else {
+            throw ScenarioGenerationError.invalidScenarios
+        }
+        return payload.rounds
     }
 }
 

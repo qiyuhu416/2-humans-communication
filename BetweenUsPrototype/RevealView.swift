@@ -39,6 +39,7 @@ struct RevealView: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.horizontal, 28)
                     .padding(.top, 8)
+                    .zIndex(10)
 
                 if !deepDiveIsOpen {
                     deepDiveSheet(in: proxy.size)
@@ -137,8 +138,8 @@ struct RevealView: View {
                     .padding(.top, 36)
                 }
 
-                nextButton
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                navigationArrows
+                    .frame(maxWidth: .infinity)
                     .padding(.top, 34)
 
                 Spacer(minLength: followUpArcHeight + 26)
@@ -159,8 +160,11 @@ struct RevealView: View {
             showingExitConfirmation = true
         } label: {
             Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.plain)
         .foregroundStyle(AppTheme.ink)
         .accessibilityLabel("Exit questions")
     }
@@ -280,8 +284,8 @@ struct RevealView: View {
                     sourceQuestion: appState.feeling
                 )
 
-                nextButton
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                navigationArrows
+                    .frame(maxWidth: .infinity)
                     .padding(.top, 18)
                     .padding(.bottom, 34)
             }
@@ -290,18 +294,32 @@ struct RevealView: View {
         .scrollIndicators(.hidden)
     }
 
-    private var nextButton: some View {
-        Button(action: moveForward) {
-            Image(systemName: "arrow.right")
-                .font(.title3)
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .frame(width: 58, height: 58)
-                .background(AppTheme.ink)
-                .clipShape(Circle())
+    private var navigationArrows: some View {
+        HStack {
+            Button {
+                appState.stage = .qiyuScenario
+            } label: {
+                Image(systemName: "arrow.left")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppTheme.ink)
+                    .frame(width: 58, height: 58)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back to answers")
+
+            Spacer()
+
+            Button(action: moveForward) {
+                Image(systemName: "arrow.right")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppTheme.ink)
+                    .frame(width: 58, height: 58)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Next question")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Next question")
     }
 
     private var suggestedQuestions: [String] {

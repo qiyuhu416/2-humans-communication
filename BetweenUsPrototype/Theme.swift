@@ -23,6 +23,7 @@ enum AppTheme {
 
 struct WarmHorizon: View {
     var expanded = false
+    var surfaceRatio: CGFloat = 0.90
 
     var body: some View {
         Group {
@@ -35,7 +36,7 @@ struct WarmHorizon: View {
                         .ignoresSafeArea()
                 }
             } else {
-                FluidWarmHorizon()
+                FluidWarmHorizon(surfaceRatio: surfaceRatio)
             }
         }
         .allowsHitTesting(false)
@@ -43,6 +44,7 @@ struct WarmHorizon: View {
 }
 
 private struct FluidWarmHorizon: View {
+    let surfaceRatio: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var motion = LiquidMotionObserver()
 
@@ -63,7 +65,7 @@ private struct FluidWarmHorizon: View {
                         phase: phase + 0.8,
                         tilt: tilt * 170,
                         amplitude: reduceMotion ? 0 : 7 + splash * 18,
-                        surfaceY: proxy.size.height * 0.885 + verticalShift
+                        surfaceY: proxy.size.height * max(0, surfaceRatio - 0.015) + verticalShift
                     )
                     .fill(AppTheme.accentSoft.opacity(0.75))
 
@@ -71,7 +73,7 @@ private struct FluidWarmHorizon: View {
                         phase: phase + Double(splash) * 2.4,
                         tilt: tilt * 210,
                         amplitude: reduceMotion ? 0 : 10 + splash * 28,
-                        surfaceY: proxy.size.height * 0.90 + verticalShift
+                        surfaceY: proxy.size.height * surfaceRatio + verticalShift
                     )
                     .fill(AppTheme.accent)
 
@@ -79,7 +81,7 @@ private struct FluidWarmHorizon: View {
                         LiquidSplashLayer(
                             time: timeline.date.timeIntervalSinceReferenceDate,
                             energy: splash,
-                            surfaceY: proxy.size.height * 0.90 + verticalShift,
+                            surfaceY: proxy.size.height * surfaceRatio + verticalShift,
                             tilt: tilt * 210
                         )
                         .fill(AppTheme.accent)

@@ -62,19 +62,35 @@ struct RoundIntroView: View {
 
             Spacer()
 
-            Button(action: advanceToQuestions) {
-                Image(systemName: "arrow.right")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(AppTheme.ink)
-                    .frame(width: 52, height: 52)
-                    .contentShape(Rectangle())
+            HStack {
+                Button {
+                    appState.stage = .conversationGuide
+                } label: {
+                    Image(systemName: "arrow.left")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(width: 52, height: 52)
+                }
+                .buttonStyle(.plain)
+                .disabled(isTransitioning || showRationale)
+                .accessibilityLabel("Back")
+
+                Spacer()
+
+                Button(action: advanceToQuestions) {
+                    Image(systemName: "arrow.right")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(width: 52, height: 52)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isTransitioning || showRationale)
+                .accessibilityLabel("Continue")
             }
-            .buttonStyle(.plain)
-            .disabled(isTransitioning || showRationale)
-            .frame(maxWidth: .infinity, alignment: .trailing)
             .padding(.bottom, 126)
-            .accessibilityLabel("Continue")
         }
         .padding(.horizontal, 28)
     }

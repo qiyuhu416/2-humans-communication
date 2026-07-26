@@ -1,5 +1,11 @@
 .DS_Store
 
+# Local secrets
+.env
+.env.*
+!.env.example
+.openai-api-key
+
 # Xcode user state
 xcuserdata/
 *.xcuserstate

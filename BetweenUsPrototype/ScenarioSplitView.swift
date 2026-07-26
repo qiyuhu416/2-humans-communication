@@ -71,6 +71,20 @@ struct ScenarioSplitView: View {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
+            .overlay(alignment: .leading) {
+                Button {
+                    appState.clearCurrentAnswersAndReturnToIntro()
+                } label: {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: dividerHeight, height: dividerHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color(.secondaryLabel))
+                .padding(.leading, 2)
+                .accessibilityLabel("Back to question")
+            }
             .overlay(alignment: .trailing) {
                     Button {
                         showingExitConfirmation = true
@@ -264,7 +278,9 @@ private struct AnswerActionButton: View {
     private var title: String {
         if isLocked { return "Ready" }
         if otherPersonIsReady { return "See both" }
-        return answerRole == .receiving ? "I’d feel good with this" : "I could do this"
+        return answerRole == .receiving
+            ? "I’d feel good with this"
+            : "I’d feel comfortable doing this"
     }
 
     private var symbol: String {

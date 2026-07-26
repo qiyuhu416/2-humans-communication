@@ -14,6 +14,7 @@ A minimal, local-first prototype for turning an abstract relationship feeling in
 3. **Two scenario sources**
    - Hard-coded uses deterministic local scenario families for stable UX review
    - AI uses Apple’s on-device Foundation Models framework after the user types a moment or question
+   - When Apple’s model is unavailable, AI calls the separately configured backend
    - The generation request includes the selected person, both saved profiles, and neutral-question research constraints
 
 4. **Face-to-face split view**
@@ -40,9 +41,9 @@ The deployment target is iOS 17.0 and the app has no external dependencies.
 
 Open either person’s card and choose **AI**. No API key or network request is used. The app checks `SystemLanguageModel.default.availability` before enabling generation.
 
-On-device generation requires iOS 26 or later, an Apple Intelligence-capable device, Apple Intelligence enabled, and the system model downloaded. The Hard-coded tab remains usable everywhere supported by the app.
+On-device generation requires iOS 26 or later, an Apple Intelligence-capable device, Apple Intelligence enabled, and the system model downloaded. When it is unavailable—such as in the Simulator—the AI tab calls the configured backend. It never substitutes hard-coded scenarios.
 
-When the system model is unavailable—such as in an unsupported simulator—the AI tab remains testable in a clearly labeled **Preview mode**. Preview mode uses the local adaptive planner to select and order relevant scenario families; it does not claim that model-generated wording was used.
+For Simulator development, run the dependency-free service in `Backend/README.md`. The default URL is `http://127.0.0.1:8787`.
 
 The provider abstraction and Apple implementation live in:
 

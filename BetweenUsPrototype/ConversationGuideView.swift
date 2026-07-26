@@ -25,12 +25,12 @@ struct ConversationGuideView: View {
             VStack(alignment: .leading, spacing: 22) {
                 guideRow(
                     symbol: "hand.tap",
-                    text: "\(appState.reflectionOwner.rawValue), choose what you’d feel good receiving."
+                    text: "\(appState.selectedPersonName), choose what you’d feel good receiving."
                 )
 
                 guideRow(
                     symbol: "heart",
-                    text: "\(appState.reflectionOwner.partner.rawValue), choose what you could comfortably do on a real week."
+                    text: "\(appState.otherParticipantName), choose what you could comfortably do on a real week."
                 )
             }
             .padding(.top, 34)
@@ -55,21 +55,31 @@ struct ConversationGuideView: View {
 
             Spacer()
 
-            Button {
-                appState.stage = .roundIntro
-            } label: {
-                HStack {
-                    Text("Begin")
-                    Spacer()
-                    Image(systemName: "arrow.right")
+            HStack {
+                Button {
+                    appState.stage = .qiyuHome
+                } label: {
+                    Image(systemName: "arrow.left")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(width: 52, height: 52)
                 }
-                .font(.headline)
-                .frame(maxWidth: .infinity)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+
+                Spacer()
+
+                Button {
+                    appState.stage = .roundIntro
+                } label: {
+                    Image(systemName: "arrow.right")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(width: 52, height: 52)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Begin")
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.roundedRectangle(radius: 16))
-            .controlSize(.large)
-            .tint(AppTheme.ink)
             .padding(.bottom, 18)
         }
         .padding(.horizontal, 28)

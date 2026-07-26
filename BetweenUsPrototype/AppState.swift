@@ -2,16 +2,23 @@ import SwiftUI
 
 @MainActor
 final class AppState: ObservableObject {
-    @Published var stage: AppStage = .perspective
+    @Published var stage: AppStage = .qiyuHome
     @Published var reflectionOwner: Perspective = .qiyu
     @Published var entryMode: ReflectionEntryMode = .concreteMoment
-    @Published var scenarioSourceMode: ScenarioSourceMode = .curated
+    @Published var scenarioSourceMode: ScenarioSourceMode = .adaptive
     @Published var feeling: String = ""
+    @Published var isAIEnabled: Bool = UserDefaults.standard.object(
+        forKey: "between-us.ai-enabled"
+    ) as? Bool ?? true
+    @Published var selectedPersonName: String = "Qiyu"
+    @Published var savedPersonNames: [String] = ["Qiyu", "Samar"]
+    @Published var personPromptHistory: [String: [String]] = [:]
     @Published var sharedExperiment: String = ""
     @Published private(set) var adaptiveRounds: [ScenarioRound] = []
     @Published var isGeneratingScenarios = false
     @Published var generationError: String?
     @Published var generationNotice: String?
+    @Published var cloudGeneratorURL: String
 
     @Published var qiyuChoiceID: String?
     @Published var samarPredictionID: String?
@@ -27,13 +34,21 @@ final class AppState: ObservableObject {
 
     private let historyKey = "between-us.saved-sessions"
     private let profilesKey = "between-us.person-profiles"
+    private let peopleKey = "between-us.saved-people"
+    private let personPromptsKey = "between-us.person-prompts"
+    private let selectedPersonKey = "between-us.selected-person"
+    private let aiEnabledKey = "between-us.ai-enabled"
     private var profileReturnStage: AppStage = .perspective
     private let adaptiveEngine = LocalAdaptiveScenarioEngine()
-    private let aiScenarioService: any ScenarioGenerationProvider = OnDeviceScenarioService()
+    private let onDeviceScenarioService = OnDeviceScenarioService()
+    private let cloudURLKey = "between-us.cloud-generator-url"
 
     init() {
+        cloudGeneratorURL = UserDefaults.standard.string(forKey: "between-us.cloud-generator-url")
+            ?? "http://127.0.0.1:8787"
         loadHistory()
         loadProfiles()
+        loadPeople()
     }
 
     let rounds: [ScenarioRound] = [
@@ -823,13 +838,79 @@ final class AppState: ObservableObject {
     }
 
     func startQiyuFlow() {
-        reflectionOwner = .qiyu
+        selectPerson(named: "Qiyu")
         stage = .qiyuHome
     }
     func startSamarFlow() {
-        reflectionOwner = .samar
-        scenarioSourceMode = .curated
+        selectPerson(named: "Samar")
         stage = .qiyuHome
+    }
+
+    func selectPerson(named name: String) {
+        guard savedPersonNames.contains(name) else { return }
+        selectedPersonName = name
+        reflectionOwner = name.caseInsensitiveCompare("Samar") == .orderedSame ? .samar : .qiyu
+        UserDefaults.standard.set(name, forKey: selectedPersonKey)
+    }
+
+    func addPerson(named rawName: String) {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+
+        if !savedPersonNames.contains(where: {
+            $0.caseInsensitiveCompare(name) == .orderedSame
+        }) {
+            savedPersonNames.append(name)
+            persistPeople()
+        }
+        selectPerson(named: savedPersonNames.first(where: {
+            $0.caseInsensitiveCompare(name) == .orderedSame
+        }) ?? name)
+    }
+
+    var selectedPersonSuggestions: [(label: String, question: String)] {
+        if selectedPersonName == "Qiyu" || selectedPersonName == "Samar",
+           let profile = profiles.first(where: { $0.id == reflectionOwner }) {
+            var seenLabels = Set<String>()
+            let profileSuggestions = profile.insights.compactMap { insight
+                -> (label: String, question: String)? in
+                let label = profileChipLabel(for: insight)
+                guard seenLabels.insert(label).inserted else { return nil }
+                return (label, profileQuestion(for: insight))
+            }
+            if !profileSuggestions.isEmpty {
+                return Array(profileSuggestions.prefix(4))
+            }
+        }
+
+        let previous = personPromptHistory[selectedPersonName, default: []]
+        if !previous.isEmpty {
+            return previous.prefix(5).enumerated().map { index, prompt in
+                ("Earlier \(index + 1)", prompt)
+            }
+        }
+
+        return [
+            ("Feeling close", "Which moments make me feel close to someone?"),
+            ("Making plans", "What kind of planning feels comfortable to me?"),
+            ("Feeling cared for", "Which specific actions make me feel cared for?")
+        ]
+    }
+
+    var sessionsForSelectedPerson: [SavedSession] {
+        savedSessions.filter {
+            ($0.ownerName ?? "Qiyu") == selectedPersonName
+        }
+    }
+
+    var otherParticipantName: String {
+        if selectedPersonName.caseInsensitiveCompare("Qiyu") == .orderedSame {
+            return "Samar"
+        }
+        if selectedPersonName.caseInsensitiveCompare("Samar") == .orderedSame {
+            return "Qiyu"
+        }
+        return "The other person"
     }
 
     func openProfiles(returningTo stage: AppStage) {
@@ -923,6 +1004,7 @@ final class AppState: ObservableObject {
         ScenarioGenerationRequest(
             entryMode: entryMode.rawValue,
             userText: feeling,
+            personName: selectedPersonName,
             profile: personalizationContext
         )
     }
@@ -940,7 +1022,19 @@ final class AppState: ObservableObject {
         stage = .summary
     }
 
-    func prepareScenarioFlow() async {
+    func beginScenarioFlowFromHome() {
+        entryMode = .concreteMoment
+        scenarioSourceMode = isAIEnabled ? .adaptive : .curated
+        saveCurrentPromptForSelectedPerson()
+        stage = .perspective
+    }
+
+    func setAIEnabled(_ isEnabled: Bool) {
+        isAIEnabled = isEnabled
+        UserDefaults.standard.set(isEnabled, forKey: aiEnabledKey)
+    }
+
+    func prepareScenarioFlow(advanceWhenReady: Bool = true) async {
         currentRoundIndex = 0
         currentQuestionNumber = 0
         roundRecords = []
@@ -952,9 +1046,9 @@ final class AppState: ObservableObject {
             isGeneratingScenarios = true
             defer { isGeneratingScenarios = false }
 
-            if aiScenarioService.isAvailable {
+            if onDeviceScenarioService.isAvailable {
                 do {
-                    adaptiveRounds = try await aiScenarioService.generate(
+                    adaptiveRounds = try await onDeviceScenarioService.generate(
                         request: scenarioGenerationRequest,
                         receiver: reflectionOwner
                     )
@@ -964,13 +1058,22 @@ final class AppState: ObservableObject {
                     return
                 }
             } else {
-                adaptiveRounds = adaptiveEngine.generate(
-                    from: rounds,
-                    userText: feeling,
-                    profile: personalizationContext,
-                    receiver: reflectionOwner
-                )
-                generationNotice = "Preview mode: these scenarios were selected by the local adaptive rules because the on-device model is unavailable here."
+                let cloudProvider = CloudScenarioService(endpoint: cloudGeneratorURL)
+                guard cloudProvider.isAvailable else {
+                    generationError = ScenarioGenerationError.cloudNotConfigured.localizedDescription
+                    return
+                }
+
+                do {
+                    adaptiveRounds = try await cloudProvider.generate(
+                        request: scenarioGenerationRequest,
+                        receiver: reflectionOwner
+                    )
+                    generationNotice = "Generated by the cloud model because the on-device model is unavailable here."
+                } catch {
+                    generationError = error.localizedDescription
+                    return
+                }
             }
         } else {
             adaptiveRounds = adaptiveEngine.generate(
@@ -980,7 +1083,9 @@ final class AppState: ObservableObject {
                 receiver: reflectionOwner
             )
         }
-        stage = .conversationGuide
+        if advanceWhenReady {
+            stage = .conversationGuide
+        }
     }
 
     func startHardcodedQuestion(_ question: String) {
@@ -1000,8 +1105,16 @@ final class AppState: ObservableObject {
         stage = .conversationGuide
     }
 
-    var isOnDeviceAIAvailable: Bool { aiScenarioService.isAvailable }
-    var onDeviceAIStatus: String { aiScenarioService.availabilityDescription }
+    var isOnDeviceAIAvailable: Bool { onDeviceScenarioService.isAvailable }
+    var onDeviceAIStatus: String { onDeviceScenarioService.availabilityDescription }
+    var isCloudAIConfigured: Bool {
+        CloudScenarioService(endpoint: cloudGeneratorURL).isAvailable
+    }
+
+    func saveCloudGeneratorURL(_ value: String) {
+        cloudGeneratorURL = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        UserDefaults.standard.set(cloudGeneratorURL, forKey: cloudURLKey)
+    }
 
     func startNextRound() {
         recordCurrentRoundIfNeeded()
@@ -1018,8 +1131,13 @@ final class AppState: ObservableObject {
         stage = .roundIntro
     }
 
+    func clearCurrentAnswersAndReturnToIntro() {
+        clearRoundAnswers()
+        stage = .roundIntro
+    }
+
     func resetSession() {
-        stage = .perspective
+        stage = .qiyuHome
         feeling = ""
         sharedExperiment = ""
         currentRoundIndex = 0
@@ -1040,7 +1158,50 @@ final class AppState: ObservableObject {
         roundRecords = []
         adaptiveRounds = []
         clearRoundAnswers()
-        stage = .entryChoice
+        stage = .qiyuHome
+    }
+
+    private func profileChipLabel(for insight: ProfileInsight) -> String {
+        let statement = insight.statement.lowercased()
+
+        if statement.contains("next shared plan") || statement.contains("tentative plan") {
+            return "Having the next plan"
+        }
+        if statement.contains("shared experiences") || statement.contains("look forward") {
+            return "Things to look forward to"
+        }
+        if statement.contains("text") || statement.contains("short text") {
+            return "Sharing by text"
+        }
+        if statement.contains("starting the planning") {
+            return "Who starts the plan"
+        }
+        if statement.contains("12 hours") || statement.contains("workday") {
+            return "When work runs late"
+        }
+        if statement.contains("listening carefully") {
+            return "Talking through hard things"
+        }
+
+        switch insight.kind {
+        case .connection: return "A moment together"
+        case .constraint: return "A real constraint"
+        case .communication: return "How the message arrives"
+        case .sustainableAction: return "A repeatable action"
+        }
+    }
+
+    private func profileQuestion(for insight: ProfileInsight) -> String {
+        switch insight.kind {
+        case .connection:
+            return "Which everyday moments help me feel connected, and what changes between them?"
+        case .constraint:
+            return "When \(insight.statement.lowercased()), which responses could still work for both people?"
+        case .communication:
+            return "What could sharing look like when \(insight.statement.lowercased())?"
+        case .sustainableAction:
+            return "Which small actions related to this feel repeatable: \(insight.statement)"
+        }
     }
 
     func recordCurrentRoundIfNeeded() {
@@ -1068,7 +1229,7 @@ final class AppState: ObservableObject {
     func finishSession() {
         recordCurrentRoundIfNeeded()
         guard !roundRecords.isEmpty else {
-            stage = .perspective
+            stage = .qiyuHome
             return
         }
 
@@ -1080,6 +1241,7 @@ final class AppState: ObservableObject {
             experiment: sharedExperiment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil
                 : sharedExperiment,
+            ownerName: selectedPersonName,
             receiver: reflectionOwner
         )
         savedSessions.insert(session, at: 0)
@@ -1112,6 +1274,44 @@ final class AppState: ObservableObject {
         } else {
             profiles = Self.defaultProfiles
             persistProfiles()
+        }
+    }
+
+    private func saveCurrentPromptForSelectedPerson() {
+        let prompt = feeling.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return }
+
+        var prompts = personPromptHistory[selectedPersonName, default: []]
+        prompts.removeAll { $0.caseInsensitiveCompare(prompt) == .orderedSame }
+        prompts.insert(prompt, at: 0)
+        personPromptHistory[selectedPersonName] = Array(prompts.prefix(12))
+        persistPeople()
+    }
+
+    private func persistPeople() {
+        UserDefaults.standard.set(savedPersonNames, forKey: peopleKey)
+        UserDefaults.standard.set(selectedPersonName, forKey: selectedPersonKey)
+        if let data = try? JSONEncoder().encode(personPromptHistory) {
+            UserDefaults.standard.set(data, forKey: personPromptsKey)
+        }
+    }
+
+    private func loadPeople() {
+        if let names = UserDefaults.standard.stringArray(forKey: peopleKey),
+           !names.isEmpty {
+            savedPersonNames = names
+        }
+
+        if let data = UserDefaults.standard.data(forKey: personPromptsKey),
+           let prompts = try? JSONDecoder().decode([String: [String]].self, from: data) {
+            personPromptHistory = prompts
+        }
+
+        let savedSelection = UserDefaults.standard.string(forKey: selectedPersonKey) ?? "Qiyu"
+        if savedPersonNames.contains(savedSelection) {
+            selectPerson(named: savedSelection)
+        } else {
+            selectPerson(named: "Qiyu")
         }
     }
 

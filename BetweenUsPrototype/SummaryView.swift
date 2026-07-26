@@ -623,39 +623,177 @@ struct CoDesignView: View {
 
 struct QiyuHomeView: View {
     @EnvironmentObject private var appState: AppState
-    @State private var selectedMode: ScenarioSourceMode = .curated
+    @State private var isAddingPerson = false
+    @State private var newPersonName = ""
+    @State private var flowerPlantRequest: FlowerPlantRequest?
+    @State private var homeWaterlineY: CGFloat?
+    @FocusState private var composerIsFocused: Bool
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Picker("Question source", selection: $selectedMode) {
-                    ForEach(ScenarioSourceMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+            ZStack {
+                FlowerGardenBackground(
+                    plantRequest: $flowerPlantRequest,
+                    surfaceY: homeWaterlineY
+                )
 
-                if selectedMode == .curated {
-                    curatedHome
-                } else {
-                    adaptiveHome
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 28) {
+                        GeometryReader { proxy in
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    SpatialTapGesture()
+                                        .onEnded { value in
+                                            composerIsFocused = false
+                                            let frame = proxy.frame(in: .named("home-garden"))
+                                            flowerPlantRequest = FlowerPlantRequest(
+                                                point: CGPoint(
+                                                    x: frame.minX + value.location.x,
+                                                    y: frame.minY + value.location.y
+                                                )
+                                            )
+                                        }
+                                )
+                        }
+                        .frame(height: 138)
+                        .accessibilityLabel("Tap to grow a flower")
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("What’s on your mind?")
+                            .font(.largeTitle.bold())
+                            .foregroundStyle(AppTheme.ink)
+
+                        Toggle(
+                            isOn: Binding(
+                                get: { appState.isAIEnabled },
+                                set: { appState.setAIEnabled($0) }
+                            )
+                        ) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("AI examples")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(AppTheme.ink)
+
+                                Text(appState.isAIEnabled
+                                     ? "Generated from your words and profile"
+                                     : "Use the saved local scenarios")
+                                    .font(.caption)
+                                    .foregroundStyle(AppTheme.secondaryInk)
+                            }
+                        }
+                        .tint(AppTheme.accent)
+                        .padding(.horizontal, 2)
+
+                        ZStack(alignment: .topLeading) {
+                            if appState.feeling.isEmpty {
+                                Text("Describe a moment or type a question…")
+                                    .font(.body)
+                                    .foregroundStyle(Color(.placeholderText))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 18)
+                                    .allowsHitTesting(false)
+                            }
+
+                            TextEditor(text: $appState.feeling)
+                                .font(.body)
+                                .scrollContentBackground(.hidden)
+                                .focused($composerIsFocused)
+                                .padding(.leading, 12)
+                                .padding(.trailing, 54)
+                                .padding(.top, 10)
+                                .padding(.bottom, 46)
+                                .frame(minHeight: 164)
+                        }
+                        .overlay(alignment: .bottom) {
+                            HStack {
+                                personMenu
+
+                                Spacer()
+
+                                Button {
+                                    appState.beginScenarioFlowFromHome()
+                                } label: {
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(AppTheme.ink)
+                                        .frame(width: 34, height: 34)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(
+                                    appState.feeling
+                                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                                        .isEmpty
+                                )
+                                .accessibilityLabel("Generate examples")
+                            }
+                            .padding(12)
+                        }
+                        .background(AppTheme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(AppTheme.divider, lineWidth: 1)
+                        }
+
+                        FlowLayout(spacing: 8) {
+                            ForEach(appState.selectedPersonSuggestions.prefix(3), id: \.question) { suggestion in
+                                HomeSuggestionChip(label: suggestion.label) {
+                                    appState.feeling = suggestion.question
+                                }
+                            }
+                        }
+                    }
+
+                        if !appState.sessionsForSelectedPerson.isEmpty {
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: HomeWaterlinePreferenceKey.self,
+                                    value: proxy.frame(in: .named("home-garden")).midY
+                                )
+                            }
+                            .frame(height: 26)
+                            .accessibilityHidden(true)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Past conversations")
+                                    .font(.title3.bold())
+                                    .foregroundStyle(AppTheme.ink)
+
+                                ForEach(appState.sessionsForSelectedPerson) { session in
+                                    Button {
+                                        appState.openSession(session)
+                                    } label: {
+                                        SessionHistoryRow(session: session)
+                                            .padding(.vertical, 10)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if session.id != appState.sessionsForSelectedPerson.last?.id {
+                                        Divider()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 40)
+                }
+                .scrollContentBackground(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .onTapGesture {
+                    composerIsFocused = false
                 }
             }
-            .background(Color(.systemBackground))
+            .coordinateSpace(name: "home-garden")
+            .onPreferenceChange(HomeWaterlinePreferenceKey.self) { value in
+                guard homeWaterlineY == nil, value > 0 else { return }
+                homeWaterlineY = value
+            }
             .navigationTitle("Conversations")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        appState.stage = .perspective
-                    } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    .accessibilityLabel("Back")
-                }
-
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         appState.openProfiles(returningTo: .qiyuHome)
@@ -664,223 +802,108 @@ struct QiyuHomeView: View {
                     }
                     .accessibilityLabel("Profile")
                 }
-            }
-            .onAppear {
-                selectedMode = appState.scenarioSourceMode
-            }
-        }
-    }
 
-    private var curatedHome: some View {
-        Group {
-            if appState.reflectionOwner == .samar {
-                samarHardcodedHome
-            } else {
-                curatedHistoryHome
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button {
+                        composerIsFocused = false
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                    }
+                    .accessibilityLabel("Hide keyboard")
+                }
             }
-        }
-    }
-
-    private var curatedHistoryHome: some View {
-        ZStack(alignment: .bottomTrailing) {
-            if appState.savedSessions.isEmpty {
-                ContentUnavailableView(
-                    "No conversations yet",
-                    systemImage: "person.2",
-                    description: Text("Start with a moment or a question you want to explore together.")
+            .alert("Add a person", isPresented: $isAddingPerson) {
+                TextField("Name", text: $newPersonName)
+                Button("Cancel", role: .cancel) {
+                    newPersonName = ""
+                }
+                Button("Add") {
+                    appState.addPerson(named: newPersonName)
+                    newPersonName = ""
+                }
+            } message: {
+                Text("Their prompts and conversation history will be saved separately.")
+            }
+            .alert(
+                "Couldn’t generate examples",
+                isPresented: Binding(
+                    get: { appState.generationError != nil },
+                    set: { if !$0 { appState.generationError = nil } }
                 )
-            } else {
-                List {
-                    ForEach(appState.savedSessions) { session in
-                        Button {
-                            appState.openSession(session)
-                        } label: {
-                            SessionHistoryRow(session: session)
-                        }
-                        .buttonStyle(.plain)
-                        .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 16))
-                        .listRowBackground(Color(.systemBackground))
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(appState.generationError ?? "")
+            }
+        }
+    }
+
+    private var personMenu: some View {
+        Menu {
+            ForEach(appState.savedPersonNames, id: \.self) { name in
+                Button {
+                    appState.selectPerson(named: name)
+                } label: {
+                    if name == appState.selectedPersonName {
+                        Label(name, systemImage: "checkmark")
+                    } else {
+                        Text(name)
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .contentMargins(.bottom, 88, for: .scrollContent)
-                .background(Color(.systemBackground))
             }
+
+            Divider()
 
             Button {
-                appState.startNewReflection(mode: .curated)
+                isAddingPerson = true
             } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 21, weight: .semibold))
-                    .frame(width: 56, height: 56)
+                Label("Add person", systemImage: "plus")
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.circle)
-            .tint(AppTheme.ink)
-            .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
-            .padding(.trailing, 22)
-            .padding(.bottom, 20)
-            .accessibilityLabel("New curated conversation")
-        }
-    }
-
-    private var samarHardcodedHome: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                Text("Pick a question to try")
-                    .font(.title2.bold())
+        } label: {
+            HStack(spacing: 8) {
+                Text("I’m \(appState.selectedPersonName)")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.ink)
-                    .padding(.bottom, 4)
-
-                Text("These saved sets use the same scenarios every time, so you can review and refine the wording.")
-                    .font(.subheadline)
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(AppTheme.secondaryInk)
-                    .padding(.bottom, 8)
-
-                ForEach(appState.suggestedQuestions, id: \.question) { item in
-                    Button {
-                        appState.startHardcodedQuestion(item.question)
-                    } label: {
-                        HStack(spacing: 14) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(item.label)
-                                    .font(.headline)
-                                    .foregroundStyle(AppTheme.ink)
-                                Text(item.question)
-                                    .font(.subheadline)
-                                    .foregroundStyle(AppTheme.secondaryInk)
-                                    .multilineTextAlignment(.leading)
-                            }
-                            Spacer(minLength: 12)
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(Color(.tertiaryLabel))
-                        }
-                        .padding(18)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(AppTheme.divider, lineWidth: 1)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Button {
-                    appState.startNewReflection(mode: .curated)
-                } label: {
-                    Label("Write a different question", systemImage: "square.and.pencil")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: 16))
-                .controlSize(.large)
-                .tint(AppTheme.ink)
-                .padding(.top, 8)
             }
-            .padding(24)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(Capsule())
         }
+        .accessibilityLabel("Who you are")
+        .accessibilityValue(appState.selectedPersonName)
     }
+}
 
-    private var adaptiveHome: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Generated for this conversation", systemImage: "sparkles")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppTheme.accent)
+private struct HomeSuggestionChip: View {
+    let label: String
+    let action: () -> Void
 
-                    Text("Start with your words")
-                        .font(.largeTitle.bold())
-                        .foregroundStyle(AppTheme.ink)
-
-                    Text("On-device AI uses what \(appState.reflectionOwner.rawValue) types and both saved profiles to write new, concrete comparisons. The text stays on this device.")
-                        .font(.body)
-                        .foregroundStyle(AppTheme.secondaryInk)
-                        .lineSpacing(4)
-                }
-                .padding(22)
-                .background(AppTheme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(AppTheme.divider, lineWidth: 1)
-                }
-
-                VStack(alignment: .leading, spacing: 16) {
-                    adaptiveStep("1", "You describe a moment or type a question.")
-                    adaptiveStep("2", "AI writes neutral moments that change one behavior at a time.")
-                    adaptiveStep("3", "\(appState.reflectionOwner.rawValue) chooses what feels good; \(appState.reflectionOwner.partner.rawValue) chooses what feels realistic.")
-                    adaptiveStep("4", "The next comparison looks for a workable bridge.")
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("On-device model")
-                        .font(.headline)
-                        .foregroundStyle(AppTheme.ink)
-
-                    Label(
-                        appState.onDeviceAIStatus,
-                        systemImage: appState.isOnDeviceAIAvailable
-                            ? "checkmark.circle.fill"
-                            : "exclamationmark.circle"
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(
-                        appState.isOnDeviceAIAvailable
-                            ? Color.green
-                            : AppTheme.secondaryInk
-                    )
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    Text(
-                        appState.isOnDeviceAIAvailable
-                            ? "No API key or network connection is used."
-                            : "You can still preview the adaptive flow here. A supported physical device will generate new language on-device."
-                    )
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.secondaryInk)
-                }
-                .padding(18)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-
-                Button {
-                    appState.startNewReflection(mode: .adaptive)
-                } label: {
-                    HStack {
-                        Text("Generate new scenarios")
-                        Spacer()
-                        Image(systemName: "arrow.right")
-                    }
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.roundedRectangle(radius: 16))
-                .controlSize(.large)
-                .tint(AppTheme.ink)
-            }
-            .padding(24)
-        }
-    }
-
-    private func adaptiveStep(_ number: String, _ text: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Text(number)
-                .font(.caption.bold())
-                .foregroundStyle(Color.white)
-                .frame(width: 26, height: 26)
-                .background(AppTheme.accent)
-                .clipShape(Circle())
-
-            Text(text)
-                .font(.body)
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(AppTheme.ink)
-                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct HomeWaterlinePreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        let next = nextValue()
+        if next > 0 {
+            value = next
         }
     }
 }
