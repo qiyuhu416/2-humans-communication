@@ -153,7 +153,7 @@ const server = http.createServer(async (request, response) => {
       body: JSON.stringify({
         model,
         input: generationPrompt(input),
-        reasoning: { effort: "none" },
+        reasoning: { effort: "low" },
         max_output_tokens: 6000,
         text: { verbosity: "low" },
         store: false,
