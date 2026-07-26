@@ -16,6 +16,8 @@ struct RootView: View {
                 EntryChoiceView()
             case .qiyuFeeling:
                 FeelingEntryView()
+            case .conversationGuide:
+                ConversationGuideView()
             case .roundIntro:
                 RoundIntroView()
             case .qiyuScenario:
@@ -26,6 +28,8 @@ struct RootView: View {
                 CoDesignView()
             case .summary:
                 SummaryView(session: appState.selectedSession)
+            case .profiles:
+                ProfilesView()
             case .samarPlaceholder:
                 SamarPlaceholderView()
             }

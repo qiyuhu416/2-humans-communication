@@ -7,6 +7,8 @@ struct RevealView: View {
     @State private var deepDiveIsOpen = false
     @State private var pullDistance: CGFloat = 0
     @State private var expandedChoice: String?
+    @State private var showingExitConfirmation = false
+    @State private var contentScrollOffset: CGFloat = 0
 
     private let questionProvider: DiscussionQuestionProviding = LocalDiscussionQuestionProvider()
     private let revealThreshold: CGFloat = 110
@@ -19,165 +21,197 @@ struct RevealView: View {
         appState.currentRound.scenarios.first { $0.id == appState.samarPredictionID }
     }
 
-    private var actualScenario: Scenario? {
-        appState.currentRound.focusPerspective == .qiyu ? qiyuResponse : samarResponse
-    }
-
-    private var predictedScenario: Scenario? {
-        appState.currentRound.focusPerspective == .qiyu ? samarResponse : qiyuResponse
-    }
-
-    private var actualLabel: String {
-        appState.currentRound.focusPerspective.rawValue
-    }
-
-    private var predictionLabel: String {
-        appState.currentRound.focusPerspective == .qiyu ? "Samar’s guess" : "Qiyu’s guess"
-    }
-
-    private var hasNextRound: Bool {
-        appState.currentRoundIndex + 1 < appState.rounds.count
+    private var unchosenResponses: [Scenario] {
+        guard appState.answersMatch, let selectedID = appState.qiyuChoiceID else {
+            return []
+        }
+        return appState.currentRound.scenarios.filter { $0.id != selectedID }
     }
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .top) {
-                LayeredWarmBackground()
+                revealBackground(in: proxy.size, scrollOffset: contentScrollOffset)
 
-                answerContent
+                answerContent(in: proxy.size)
 
-                deepDiveSheet(in: proxy.size)
+                exitButton
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal, 28)
+                    .padding(.top, 8)
+
+                if !deepDiveIsOpen {
+                    deepDiveSheet(in: proxy.size)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
         }
         .onAppear {
             appState.recordCurrentRoundIfNeeded()
         }
+        .sheet(isPresented: $deepDiveIsOpen) {
+            deepDiveContent
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Color(.systemBackground))
+        }
+        .animation(.easeInOut(duration: 0.22), value: deepDiveIsOpen)
+        .confirmationDialog(
+            "Leave this conversation?",
+            isPresented: $showingExitConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Leave conversation", role: .destructive) {
+                appState.finishSession()
+            }
+            Button("Keep talking", role: .cancel) {}
+        } message: {
+            Text("Your completed answers will be saved.")
+        }
     }
 
-    private var answerContent: some View {
-        ScrollView {
+    private func answerContent(in size: CGSize) -> some View {
+        let followUpArcHeight = AppTheme.swipeArcVisibleHeight(for: size.height)
+
+        return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ZStack(alignment: .topTrailing) {
-                    VStack(spacing: 7) {
-                        Text("Both answers")
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.secondaryInk)
-
-                        Text(appState.answersMatch ? "Same" : "Different")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundStyle(AppTheme.ink)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 8)
-
-                    Button {
-                        appState.finishSession()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(AppTheme.ink)
-                    .accessibilityLabel("Exit questions")
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: RevealScrollOffsetKey.self,
+                        value: proxy.frame(in: .named("reveal-scroll")).minY
+                    )
                 }
+                .frame(height: 0)
 
-                Text(appState.currentRound.opening)
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundStyle(AppTheme.ink)
-                    .multilineTextAlignment(.center)
+                Spacer(minLength: 70)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(
+                        appState.answersMatch
+                            ? "This works for both of you"
+                            : "Here’s the gap"
+                    )
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundStyle(AppTheme.ink)
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 18)
 
-                VStack(spacing: 12) {
-                    if let actualScenario {
-                        ExpandableAnswerRow(
-                            key: "actual",
-                            label: actualLabel,
-                            scenario: actualScenario,
-                            expandedChoice: $expandedChoice
-                        )
-                    }
+                    Text(appState.currentRound.opening)
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundStyle(AppTheme.ink)
+                        .lineSpacing(4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 30)
 
-                    if let predictedScenario {
-                        ExpandableAnswerRow(
-                            key: "prediction",
-                            label: predictionLabel,
-                            scenario: predictedScenario,
-                            expandedChoice: $expandedChoice
-                        )
+                    VStack(spacing: 12) {
+                        if let qiyuResponse {
+                            ExpandableAnswerRow(
+                                key: "qiyu",
+                                label: responseLabel(for: .qiyu),
+                                scenario: qiyuResponse,
+                                expandedChoice: $expandedChoice
+                            )
+                        }
+
+                        if let samarResponse {
+                            ExpandableAnswerRow(
+                                key: "samar",
+                                label: responseLabel(for: .samar),
+                                scenario: samarResponse,
+                                expandedChoice: $expandedChoice
+                            )
+                        }
+
+                        ForEach(Array(unchosenResponses.enumerated()), id: \.element.id) { index, scenario in
+                            ExpandableAnswerRow(
+                                key: "unchosen-\(scenario.id)",
+                                label: unchosenResponses.count == 1
+                                    ? "The unchosen answer"
+                                    : "Unchosen answer \(index + 1)",
+                                scenario: scenario,
+                                expandedChoice: $expandedChoice
+                            )
+                        }
                     }
+                    .padding(.top, 36)
                 }
-                .padding(.top, 22)
 
                 nextButton
-                    .padding(.top, 18)
-                    .padding(.bottom, 210)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.top, 34)
+
+                Spacer(minLength: followUpArcHeight + 26)
             }
-            .padding()
+            .frame(minHeight: size.height)
+            .padding(.horizontal, 28)
+            .padding(.top, 4)
         }
         .scrollIndicators(.hidden)
+        .coordinateSpace(name: "reveal-scroll")
+        .onPreferenceChange(RevealScrollOffsetKey.self) { value in
+            contentScrollOffset = max(0, -value)
+        }
+    }
+
+    private var exitButton: some View {
+        Button {
+            showingExitConfirmation = true
+        } label: {
+            Image(systemName: "xmark")
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(AppTheme.ink)
+        .accessibilityLabel("Exit questions")
     }
 
     private func deepDiveSheet(in size: CGSize) -> some View {
-        let restingOffset = max(240, size.height - 150)
-        let currentOffset = deepDiveIsOpen
-            ? CGFloat.zero
-            : max(0, restingOffset - pullDistance)
+        let followUpArcHeight = AppTheme.swipeArcVisibleHeight(for: size.height)
+        let restingOffset = max(240, size.height - followUpArcHeight)
+        let currentOffset = max(0, restingOffset - pullDistance)
 
         return ZStack(alignment: .top) {
-            RoundedRectangle(
-                cornerRadius: deepDiveIsOpen ? 48 : size.width / 2,
-                style: .continuous
-            )
-                .fill(deepDiveIsOpen ? AppTheme.page : AppTheme.accent)
+            CurvedTopArc(depth: AppTheme.swipeArcRestingDepth)
+                .fill(AppTheme.accent)
                 .ignoresSafeArea(edges: .bottom)
 
-            if deepDiveIsOpen {
-                deepDiveContent
-                    .transition(.opacity)
-            } else {
-                deepDiveHandle
-                    .transition(.opacity)
-                    .contentShape(Rectangle())
-                    .gesture(deepDiveGesture)
-            }
+            deepDiveHandle(height: followUpArcHeight)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    deepDiveIsOpen = true
+                }
+                .gesture(deepDiveGesture)
         }
         .frame(width: size.width, height: size.height)
         .offset(y: currentOffset)
-        .animation(
-            reduceMotion ? .linear(duration: 0.01) : .spring(response: 0.48, dampingFraction: 0.86),
-            value: deepDiveIsOpen
-        )
         .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.88), value: pullDistance)
     }
 
-    private var deepDiveHandle: some View {
-        VStack(spacing: 9) {
-            Image(systemName: pullDistance >= revealThreshold ? "arrow.up.circle.fill" : "arrow.up")
-                .font(.title2)
-                .foregroundStyle(AppTheme.secondaryInk)
-                .symbolEffect(.pulse, options: .repeating)
-
-            Text(deepDiveHint)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(AppTheme.secondaryInk)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 150)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Swipe up for more questions")
+    private func deepDiveHandle(height: CGFloat) -> some View {
+        SwipeUpHandle(
+            pullDistance: pullDistance,
+            threshold: revealThreshold,
+            destination: "follow-up questions",
+            height: height
+        )
     }
 
-    private var deepDiveHint: String {
-        if pullDistance >= revealThreshold {
-            return "Release for more questions"
+    private func revealBackground(in size: CGSize, scrollOffset: CGFloat) -> some View {
+        let progress = min(max(scrollOffset / 120, 0), 1)
+        let restingOffset = size.height * 0.15
+        let filledOffset: CGFloat = -28
+        let yellowOffset = restingOffset + (filledOffset - restingOffset) * progress
+
+        return ZStack(alignment: .top) {
+            AppTheme.page
+
+            CurvedTopArc(depth: 28)
+                .fill(Color(red: 1.0, green: 0.96, blue: 0.82))
+                .frame(width: size.width, height: size.height)
+                .offset(y: yellowOffset)
         }
-        if pullDistance > 36 {
-            return "Keep going"
-        }
-        return "Swipe up for more questions"
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 
     private var deepDiveGesture: some Gesture {
@@ -204,26 +238,7 @@ struct RevealView: View {
     private var deepDiveContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                HStack {
-                    Capsule()
-                        .fill(Color(.tertiaryLabel))
-                        .frame(width: 36, height: 5)
-
-                    Spacer()
-
-                    Button {
-                        withAnimation {
-                            deepDiveIsOpen = false
-                        }
-                    } label: {
-                        Image(systemName: "chevron.down")
-                    }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(AppTheme.secondaryInk)
-                    .accessibilityLabel("Close more questions")
-                }
-
-                Text("More questions")
+                Text("Keep talking")
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundStyle(AppTheme.ink)
@@ -232,24 +247,41 @@ struct RevealView: View {
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.secondaryInk)
 
-                ForEach(Array(suggestedQuestions.enumerated()), id: \.offset) { index, question in
-                    HStack(alignment: .top, spacing: 14) {
-                        Text("\(index + 1)")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(AppTheme.ink)
-                            .frame(width: 28, height: 28)
-                            .background(AppTheme.accentSoft)
-                            .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 14) {
+                    Label("A few places to go next", systemImage: "bubble.left.and.bubble.right")
+                        .font(.headline)
+                        .foregroundStyle(AppTheme.ink)
 
-                        Text(question)
-                            .font(.body)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(AppTheme.ink)
+                    ForEach(Array(suggestedQuestions.enumerated()), id: \.offset) { index, question in
+                        HStack(alignment: .top, spacing: 14) {
+                            Text("\(index + 1)")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundStyle(AppTheme.ink)
+                                .frame(width: 28, height: 28)
+                                .background(AppTheme.accentSoft)
+                                .clipShape(Circle())
+
+                            Text(question)
+                                .font(.body)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(AppTheme.ink)
+                        }
                     }
                 }
+                .padding(18)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                Divider()
+
+                AIRationaleContent(
+                    round: appState.currentRound,
+                    sourceQuestion: appState.feeling
+                )
 
                 nextButton
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.top, 18)
                     .padding(.bottom, 34)
             }
@@ -260,16 +292,16 @@ struct RevealView: View {
 
     private var nextButton: some View {
         Button(action: moveForward) {
-            Label(
-                hasNextRound ? "Next question" : "Find the overlap",
-                systemImage: "arrow.right"
-            )
-            .frame(maxWidth: .infinity)
+            Image(systemName: "arrow.right")
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+                .frame(width: 58, height: 58)
+                .background(AppTheme.ink)
+                .clipShape(Circle())
         }
-        .buttonStyle(.borderedProminent)
-        .buttonBorderShape(.roundedRectangle(radius: 14))
-        .controlSize(.large)
-        .tint(AppTheme.ink)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Next question")
     }
 
     private var suggestedQuestions: [String] {
@@ -279,12 +311,22 @@ struct RevealView: View {
         )
     }
 
+    private func responseLabel(for person: Perspective) -> String {
+        person == appState.reflectionOwner
+            ? "\(person.rawValue) would feel good with"
+            : "\(person.rawValue) could comfortably do"
+    }
+
     private func moveForward() {
-        if hasNextRound {
-            appState.startNextRound()
-        } else {
-            appState.stage = .coDesign
-        }
+        appState.startNextRound()
+    }
+}
+
+private struct RevealScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
@@ -307,7 +349,6 @@ private struct ExpandableAnswerRow: View {
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundStyle(AppTheme.secondaryInk)
-                            .textCase(.uppercase)
 
                         Text(scenario.title)
                             .font(.headline)
@@ -329,10 +370,11 @@ private struct ExpandableAnswerRow: View {
                 }
             }
             .padding()
+            .frame(minHeight: 100)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: Color.black.opacity(0.08), radius: 6, y: 2)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: Color.black.opacity(0.045), radius: 5, y: 2)
         }
         .buttonStyle(.plain)
     }

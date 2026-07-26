@@ -22,6 +22,9 @@
 		A0000000000000000000000D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000D /* Assets.xcassets */; };
 		A0000000000000000000000F /* RoundIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000F /* RoundIntroView.swift */; };
 		A00000000000000000000010 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* SummaryView.swift */; };
+		A00000000000000000000011 /* ProfilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* ProfilesView.swift */; };
+		A00000000000000000000012 /* ConversationGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012 /* ConversationGuideView.swift */; };
+		A00000000000000000000013 /* LocalAdaptiveScenarioEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000013 /* LocalAdaptiveScenarioEngine.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +44,9 @@
 		B0000000000000000000000E /* BetweenUsPrototype.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BetweenUsPrototype.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0000000000000000000000F /* RoundIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoundIntroView.swift; sourceTree = "<group>"; };
 		B00000000000000000000010 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
+		B00000000000000000000011 /* ProfilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesView.swift; sourceTree = "<group>"; };
+		B00000000000000000000012 /* ConversationGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationGuideView.swift; sourceTree = "<group>"; };
+		B00000000000000000000013 /* LocalAdaptiveScenarioEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAdaptiveScenarioEngine.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,9 +79,12 @@
 				B00000000000000000000006 /* Components.swift */,
 				B00000000000000000000007 /* PerspectiveEntryView.swift */,
 				B00000000000000000000008 /* FeelingEntryView.swift */,
+				B00000000000000000000012 /* ConversationGuideView.swift */,
+				B00000000000000000000013 /* LocalAdaptiveScenarioEngine.swift */,
 				B00000000000000000000009 /* FactorSelectionView.swift */,
 				B0000000000000000000000F /* RoundIntroView.swift */,
 				B00000000000000000000010 /* SummaryView.swift */,
+				B00000000000000000000011 /* ProfilesView.swift */,
 				B0000000000000000000000A /* ScenarioSplitView.swift */,
 				B0000000000000000000000B /* RevealView.swift */,
 				B0000000000000000000000C /* SamarPlaceholderView.swift */,
@@ -169,9 +178,12 @@
 				A00000000000000000000006 /* Components.swift in Sources */,
 				A00000000000000000000007 /* PerspectiveEntryView.swift in Sources */,
 				A00000000000000000000008 /* FeelingEntryView.swift in Sources */,
+				A00000000000000000000012 /* ConversationGuideView.swift in Sources */,
+				A00000000000000000000013 /* LocalAdaptiveScenarioEngine.swift in Sources */,
 				A00000000000000000000009 /* FactorSelectionView.swift in Sources */,
 				A0000000000000000000000F /* RoundIntroView.swift in Sources */,
 				A00000000000000000000010 /* SummaryView.swift in Sources */,
+				A00000000000000000000011 /* ProfilesView.swift in Sources */,
 				A0000000000000000000000A /* ScenarioSplitView.swift in Sources */,
 				A0000000000000000000000B /* RevealView.swift in Sources */,
 				A0000000000000000000000C /* SamarPlaceholderView.swift in Sources */,
@@ -208,7 +220,10 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = ("DEBUG=1", "$(inherited)");
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
@@ -261,6 +276,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 3379TGULXV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Between Us";
@@ -270,7 +286,10 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.prototype.BetweenUs;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -291,6 +310,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 3379TGULXV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Between Us";
@@ -300,7 +320,10 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.prototype.BetweenUs;
 				PRODUCT_NAME = "$(TARGET_NAME)";

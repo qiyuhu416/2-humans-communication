@@ -27,7 +27,7 @@ struct EntryChoiceView: View {
 
                 entryCard(
                     title: "Start with a question",
-                    detail: "What does connection mean to you?",
+                    detail: "Type the question you want to explore.",
                     systemImage: "questionmark.bubble",
                     mode: .connectionQuestion
                 )

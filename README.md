@@ -4,16 +4,17 @@ A minimal, local-first prototype for turning an abstract relationship feeling in
 
 ## What is implemented
 
-1. **Two entry points**
-   - Qiyu: working reflection flow about connection
-   - Samar: placeholder screen for a future independent flow
+1. **Two personalized entry points**
+   - Qiyu and Samar each have Hard-coded and AI question sources
+   - Samar’s Hard-coded tab preserves five repeatable question sets about work, planning, space, support, and closeness
 
 2. **Abstract feeling input**
    - Starts with `I don’t feel connected.` but is editable
 
-3. **AI-factor draft screen**
-   - Uses a local `ReflectionEngine` stub so the prototype runs without credentials
-   - Factors are explicitly framed as hypotheses, not conclusions
+3. **Two scenario sources**
+   - Hard-coded uses deterministic local scenario families for stable UX review
+   - AI uses Apple’s on-device Foundation Models framework after the user types a moment or question
+   - The generation request includes the selected person, both saved profiles, and neutral-question research constraints
 
 4. **Face-to-face split view**
    - Upper half is rotated for the person sitting opposite the phone
@@ -35,20 +36,19 @@ A minimal, local-first prototype for turning an abstract relationship feeling in
 
 The deployment target is iOS 17.0 and the app has no external dependencies.
 
-## Where to connect a real AI model
+## On-device AI
 
-Replace the implementation of:
+Open either person’s card and choose **AI**. No API key or network request is used. The app checks `SystemLanguageModel.default.availability` before enabling generation.
 
-`BetweenUsPrototype/AppState.swift` → `ReflectionEngine.possibleFactors(for:)`
+On-device generation requires iOS 26 or later, an Apple Intelligence-capable device, Apple Intelligence enabled, and the system model downloaded. The Hard-coded tab remains usable everywhere supported by the app.
 
-Keep the returned model as `[ReflectionFactor]`. A future service can use:
+When the system model is unavailable—such as in an unsupported simulator—the AI tab remains testable in a clearly labeled **Preview mode**. Preview mode uses the local adaptive planner to select and order relevant scenario families; it does not claim that model-generated wording was used.
 
-- the abstract feeling
-- previously selected factors
-- prior scenario choices
-- relationship context explicitly supplied by the users
+The provider abstraction and Apple implementation live in:
 
-The model should generate neutral hypotheses and balanced scenario pairs. It should not diagnose users or optimize for agreement.
+`BetweenUsPrototype/LocalAdaptiveScenarioEngine.swift` → `ScenarioGenerationProvider` and `OnDeviceScenarioService`
+
+To use a non-Apple on-device model later, add a Core ML-backed type conforming to `ScenarioGenerationProvider`. That provider must handle tokenization and decoding and return validated `[ScenarioRound]` values.
 
 ## Recommended next build
 
